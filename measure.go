@@ -3,6 +3,7 @@
 package measure
 
 import (
+	"context"
 	"io"
 	"time"
 
@@ -21,6 +22,8 @@ var (
 	datastoreSizeBuckets = []float64{1 << 6, 1 << 12, 1 << 18, 1 << 24}
 )
 
+var _ blockstore.Blockstore = (*measure)(nil)
+
 // New wraps the datastore, providing metrics on the operations. The
 // metrics are registered with names starting with prefix and a dot.
 func New(prefix string, bs blockstore.Blockstore) *measure {
@@ -33,6 +36,13 @@ func New(prefix string, bs blockstore.Blockstore) *measure {
 			"Latency distribution of Blockstore.Put calls").Histogram(datastoreLatencyBuckets),
 		putSize: metrics.New(prefix+".put.size_bytes",
 			"Size distribution of stored byte slices").Histogram(datastoreSizeBuckets),
+
+		putManyNum: metrics.New(prefix+".putmany_total", "Total number of Datastore.PutMany calls").Counter(),
+		putManyErr: metrics.New(prefix+".putmany.errors_total", "Number of errored Blockstore.PutMany calls").Counter(),
+		putManyLatency: metrics.New(prefix+".putmany.latency_seconds",
+			"Latency distribution of Blockstore.PutMany calls").Histogram(datastoreLatencyBuckets),
+		putManySize: metrics.New(prefix+".putmany.size_bytes",
+			"Size distribution of Blockstore.PutMany batch sizes").Histogram(datastoreSizeBuckets),
 
 		syncNum: metrics.New(prefix+".sync_total", "Total number of Blockstore.Sync calls").Counter(),
 		syncErr: metrics.New(prefix+".sync.errors_total", "Number of errored Blockstore.Sync calls").Counter(),
@@ -76,6 +86,11 @@ type measure struct {
 	putLatency metrics.Histogram
 	putSize    metrics.Histogram
 
+	putManyNum     metrics.Counter
+	putManyErr     metrics.Counter
+	putManyLatency metrics.Histogram
+	putManySize    metrics.Histogram
+
 	syncNum     metrics.Counter
 	syncErr     metrics.Counter
 	syncLatency metrics.Histogram
@@ -114,6 +129,17 @@ func (m *measure) Put(blk blocks.Block) error {
 	err := m.backend.Put(blk)
 	if err != nil {
 		m.putErr.Inc()
+	}
+	return err
+}
+
+func (m *measure) PutMany(blks []blocks.Block) error {
+	defer recordLatency(m.putManyLatency, time.Now())
+	m.putManyNum.Inc()
+	m.putManySize.Observe(float64(len(blks)))
+	err := m.backend.PutMany(blks)
+	if err != nil {
+		m.putManyErr.Inc()
 	}
 	return err
 }
@@ -210,4 +236,12 @@ func (m *measure) View(c cid.Cid, f func([]byte) error) error {
 	}
 	return err
 
+}
+
+func (m *measure) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
+	return m.backend.AllKeysChan(ctx)
+}
+
+func (m *measure) HashOnRead(hor bool) {
+	m.backend.HashOnRead(hor)
 }
