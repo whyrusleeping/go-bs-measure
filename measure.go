@@ -112,6 +112,11 @@ type measure struct {
 	deleteErr     metrics.Counter
 	deleteLatency metrics.Histogram
 
+	deleteManyNum     metrics.Counter
+	deleteManySize    metrics.Histogram
+	deleteManyErr     metrics.Counter
+	deleteManyLatency metrics.Histogram
+
 	viewNum     metrics.Counter
 	viewErr     metrics.Counter
 	viewLatency metrics.Histogram
@@ -200,6 +205,31 @@ func (m *measure) DeleteBlock(c cid.Cid) error {
 	err := m.backend.DeleteBlock(c)
 	if err != nil {
 		m.deleteErr.Inc()
+	}
+	return err
+}
+
+type batchDeleter interface {
+	DeleteMany([]cid.Cid) error
+}
+
+func (m *measure) DeleteMany(cids []cid.Cid) error {
+	dm, ok := m.backend.(batchDeleter)
+	if !ok {
+		for _, c := range cids {
+			if err := m.DeleteBlock(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	defer recordLatency(m.deleteManyLatency, time.Now())
+	m.deleteManyNum.Inc()
+	m.deleteManySize.Observe(float64(len(cids)))
+	err := dm.DeleteMany(cids)
+	if err != nil {
+		m.deleteManyErr.Inc()
 	}
 	return err
 }
