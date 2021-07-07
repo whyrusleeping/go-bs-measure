@@ -70,6 +70,13 @@ func New(prefix string, bs blockstore.Blockstore) *measure {
 		deleteLatency: metrics.New(prefix+".delete.latency_seconds",
 			"Latency distribution of Blockstore.Delete calls").Histogram(datastoreLatencyBuckets),
 
+		deleteManyNum: metrics.New(prefix+".deletemany_total", "Total number of Blockstore.DeleteMany calls").Counter(),
+		deleteManyErr: metrics.New(prefix+".deletemany.errors_total", "Number of errored Blockstore.DeleteMany calls").Counter(),
+		deleteManyLatency: metrics.New(prefix+".deletemany.latency_seconds",
+			"Latency distribution of Blockstore.DeleteMany calls").Histogram(datastoreLatencyBuckets),
+		deleteManySize: metrics.New(prefix+".deletemany.size_items",
+			"Size distribution of batch delete calls").Histogram(datastoreSizeBuckets),
+
 		viewNum: metrics.New(prefix+".view_total", "Total number of Blockstore.View calls").Counter(),
 		viewErr: metrics.New(prefix+".view.errors_total", "Number of errored Blockstore.View calls").Counter(),
 		viewLatency: metrics.New(prefix+".view.latency_seconds",
