@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	// sort latencies in buckets with following upper bounds in seconds
-	datastoreLatencyBuckets = []float64{1e-4, 1e-3, 1e-2, 1e-1, 1}
+	// sort latencies in buckets with following upper bounds in milliseconds
+	datastoreLatencyBuckets = []float64{0.01, 0.05, 0.1, 0.3, 0.6, 0.8, 1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 32, 64, 128, 256, 500, 1000, 2000, 3000, 5000, 10000, 20000, 30000, 40000, 50000, 60000}
 
 	// sort sizes in buckets with following upper bounds in bytes
 	datastoreSizeBuckets = []float64{1 << 6, 1 << 12, 1 << 18, 1 << 24}
@@ -131,7 +131,7 @@ type measure struct {
 
 func recordLatency(h metrics.Histogram, start time.Time) {
 	elapsed := time.Since(start)
-	h.Observe(elapsed.Seconds())
+	h.Observe(float64(elapsed.Milliseconds()))
 }
 
 func (m *measure) Put(blk blocks.Block) error {
