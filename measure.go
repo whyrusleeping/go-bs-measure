@@ -134,22 +134,22 @@ func recordLatency(h metrics.Histogram, start time.Time) {
 	h.Observe(float64(elapsed.Milliseconds()))
 }
 
-func (m *measure) Put(blk blocks.Block) error {
+func (m *measure) Put(ctx context.Context, blk blocks.Block) error {
 	defer recordLatency(m.putLatency, time.Now())
 	m.putNum.Inc()
 	m.putSize.Observe(float64(len(blk.RawData())))
-	err := m.backend.Put(blk)
+	err := m.backend.Put(ctx, blk)
 	if err != nil {
 		m.putErr.Inc()
 	}
 	return err
 }
 
-func (m *measure) PutMany(blks []blocks.Block) error {
+func (m *measure) PutMany(ctx context.Context, blks []blocks.Block) error {
 	defer recordLatency(m.putManyLatency, time.Now())
 	m.putManyNum.Inc()
 	m.putManySize.Observe(float64(len(blks)))
-	err := m.backend.PutMany(blks)
+	err := m.backend.PutMany(ctx, blks)
 	if err != nil {
 		m.putManyErr.Inc()
 	}
@@ -168,10 +168,10 @@ func (m *measure) Sync(prefix datastore.Key) error {
 }
 */
 
-func (m *measure) Get(c cid.Cid) (blocks.Block, error) {
+func (m *measure) Get(ctx context.Context, c cid.Cid) (blocks.Block, error) {
 	defer recordLatency(m.getLatency, time.Now())
 	m.getNum.Inc()
-	value, err := m.backend.Get(c)
+	value, err := m.backend.Get(ctx, c)
 	switch err {
 	case nil:
 		m.getSize.Observe(float64(len(value.RawData())))
@@ -183,20 +183,20 @@ func (m *measure) Get(c cid.Cid) (blocks.Block, error) {
 	return value, err
 }
 
-func (m *measure) Has(c cid.Cid) (bool, error) {
+func (m *measure) Has(ctx context.Context, c cid.Cid) (bool, error) {
 	defer recordLatency(m.hasLatency, time.Now())
 	m.hasNum.Inc()
-	exists, err := m.backend.Has(c)
+	exists, err := m.backend.Has(ctx, c)
 	if err != nil {
 		m.hasErr.Inc()
 	}
 	return exists, err
 }
 
-func (m *measure) GetSize(c cid.Cid) (size int, err error) {
+func (m *measure) GetSize(ctx context.Context, c cid.Cid) (size int, err error) {
 	defer recordLatency(m.getsizeLatency, time.Now())
 	m.getsizeNum.Inc()
-	size, err = m.backend.GetSize(c)
+	size, err = m.backend.GetSize(ctx, c)
 	switch err {
 	case nil, datastore.ErrNotFound:
 		// Not really an error.
@@ -206,10 +206,10 @@ func (m *measure) GetSize(c cid.Cid) (size int, err error) {
 	return size, err
 }
 
-func (m *measure) DeleteBlock(c cid.Cid) error {
+func (m *measure) DeleteBlock(ctx context.Context, c cid.Cid) error {
 	defer recordLatency(m.deleteLatency, time.Now())
 	m.deleteNum.Inc()
-	err := m.backend.DeleteBlock(c)
+	err := m.backend.DeleteBlock(ctx, c)
 	if err != nil {
 		m.deleteErr.Inc()
 	}
@@ -217,14 +217,14 @@ func (m *measure) DeleteBlock(c cid.Cid) error {
 }
 
 type batchDeleter interface {
-	DeleteMany([]cid.Cid) error
+	DeleteMany(context.Context, []cid.Cid) error
 }
 
-func (m *measure) DeleteMany(cids []cid.Cid) error {
+func (m *measure) DeleteMany(ctx context.Context, cids []cid.Cid) error {
 	dm, ok := m.backend.(batchDeleter)
 	if !ok {
 		for _, c := range cids {
-			if err := m.DeleteBlock(c); err != nil {
+			if err := m.DeleteBlock(ctx, c); err != nil {
 				return err
 			}
 		}
@@ -234,7 +234,7 @@ func (m *measure) DeleteMany(cids []cid.Cid) error {
 	defer recordLatency(m.deleteManyLatency, time.Now())
 	m.deleteManyNum.Inc()
 	m.deleteManySize.Observe(float64(len(cids)))
-	err := dm.DeleteMany(cids)
+	err := dm.DeleteMany(ctx, cids)
 	if err != nil {
 		m.deleteManyErr.Inc()
 	}
@@ -249,13 +249,13 @@ func (m *measure) Close() error {
 }
 
 type bsViewer interface {
-	View(c cid.Cid, f func([]byte) error) error
+	View(ctx context.Context, c cid.Cid, f func([]byte) error) error
 }
 
-func (m *measure) View(c cid.Cid, f func([]byte) error) error {
+func (m *measure) View(ctx context.Context, c cid.Cid, f func([]byte) error) error {
 	v, ok := m.backend.(bsViewer)
 	if !ok {
-		blk, err := m.Get(c)
+		blk, err := m.Get(ctx, c)
 		if err != nil {
 			return err
 		}
@@ -264,7 +264,7 @@ func (m *measure) View(c cid.Cid, f func([]byte) error) error {
 
 	defer recordLatency(m.viewLatency, time.Now())
 	m.viewNum.Inc()
-	err := v.View(c, f)
+	err := v.View(ctx, c, f)
 	switch err {
 	case nil, datastore.ErrNotFound:
 		// Not really an error.
