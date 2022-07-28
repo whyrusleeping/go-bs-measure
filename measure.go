@@ -11,6 +11,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-metrics-interface"
 )
 
@@ -197,10 +198,7 @@ func (m *measure) GetSize(ctx context.Context, c cid.Cid) (size int, err error) 
 	defer recordLatency(m.getsizeLatency, time.Now())
 	m.getsizeNum.Inc()
 	size, err = m.backend.GetSize(ctx, c)
-	switch err {
-	case nil, datastore.ErrNotFound:
-		// Not really an error.
-	default:
+	if err != nil && !format.IsNotFound(err) {
 		m.getsizeErr.Inc()
 	}
 	return size, err
